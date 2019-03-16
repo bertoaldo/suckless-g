@@ -5,6 +5,8 @@
 #include "hashtable.h"
 #include "prime.h"
 
+static ht_item HT_DELETED_ITEM = {NULL, NULL};
+
 static ht_item* ht_new_item(const char *k, const char *v) {
 	ht_item *i = (ht_item *) malloc(sizeof(ht_item));
 	i->key = strdup(k);
@@ -59,7 +61,7 @@ static void ht_resize(ht_hash_table* ht, const int base_size) {
     ht->base_size = new_ht->base_size;
     ht->count = new_ht->count;
 
-    // To delete new_ht, we give it ht's size and items 
+    // To delete new_ht, we give it ht's size and items
     const int tmp_size = ht->size;
     ht->size = new_ht->size;
     new_ht->size = tmp_size;
@@ -117,7 +119,7 @@ void ht_insert(ht_hash_table* ht, const char* key, const char* value) {
         index = ht_get_hash(item->key, ht->size, i);
         cur_item = ht->items[index];
         i++;
-    } 
+    }
     ht->items[index] = item;
     ht->count++;
 }
@@ -135,7 +137,7 @@ char* ht_search(ht_hash_table* ht, const char* key) {
         index = ht_get_hash(key, ht->size, i);
         item = ht->items[index];
         i++;
-    } 
+    }
     return NULL;
 }
 
@@ -157,6 +159,6 @@ void ht_delete(ht_hash_table* ht, const char* key) {
         index = ht_get_hash(key, ht->size, i);
         item = ht->items[index];
         i++;
-    } 
+    }
     ht->count--;
 }

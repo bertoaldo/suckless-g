@@ -1,6 +1,10 @@
 #ifndef HASHTABLE_H
 #define HASHTABLE_H
 
+#define HT_INITIAL_BASE_SIZE 53
+#define HT_PRIME_1 6151
+#define HT_PRIME_2 12289
+
 typedef struct {
 	char *key;
 	char *value;
@@ -12,11 +16,6 @@ typedef struct {
 	int count;
 	ht_item **items;
 } ht_hash_table;
-
-static ht_item HT_DELETED_ITEM = {NULL, NULL};
-static int HT_INITIAL_BASE_SIZE = 53;
-static int HT_PRIME_1 = 6151;
-static int HT_PRIME_2 = 12289;
 
 ht_hash_table* ht_new() ;
 void ht_del_hash_table(ht_hash_table* ht);

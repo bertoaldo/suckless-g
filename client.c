@@ -11,7 +11,7 @@ WINDOW *pad;
 WINDOW *w;
 static int mrow, mcol;
 
-int main(int argc, char **argv)
+int main()
 {
 	// initialize curses
 	initscr();
@@ -25,14 +25,14 @@ int main(int argc, char **argv)
 
 	w = newwin(1, mcol, 0, 0);
 	wattron(w, A_REVERSE);
-	wprintw(w, "welcome to suckless \n");
+	wprintw(w, " welcome to suckless /g/ -- sucklessg.org \n");
 	wattroff(w, A_REVERSE);
 	wrefresh(w);
 
 	// makes a request to the server and returns the servers response.
 	request_t request;
 	request.r = malloc(512);
-	request.l = sprintf(request.r, "GET /page/0\r\nHost: sucklessg.org\r\n\r\n");
+	request.l = sprintf(request.r, "GET /page/0\r\nHost: %s\r\n\r\n", ADDRESS_URL);
 	post_t threads = makeRequest(request);
 
 	// load the hash table
@@ -53,10 +53,13 @@ int main(int argc, char **argv)
 	wrefresh(pad);
 
 	for (int i = 0; i < threads.length; i++) {
-		wprintw(pad, "[ id: %s ]\n%s\n@ %s\n(replies: %s)\n\n", ht_search(ht[i], "id"),  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
+		wattron(pad, A_REVERSE);
+		wprintw(pad, "[ id: %s ]\n", ht_search(ht[i], "id"));
+		wattroff(pad, A_REVERSE);
+		wprintw(pad, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
 	}
 
-	// Show content of padl
+	// Show content of pad
 	int mypadpos = 0;
 	prefresh(pad, mypadpos, 0, 1, 0, mrow-1, mcol);
 
@@ -88,6 +91,10 @@ int main(int argc, char **argv)
 	endwin();
 
 	// free memory
+	for(int i = 0; i < threads.length; ++i)
+		ht_del_hash_table(ht[i]);
+	free(ht);
+
 	for(int i = 0; i < threads.length; i++)
 		free(threads.objects[i]);
 	free(threads.objects);

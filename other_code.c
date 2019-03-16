@@ -45,7 +45,7 @@ int loadContent(ht_hash_table **ht, post_t response)
 	char *parent;
 	for(i = 0; i < response.length; ++i) {
 		jsmn_init(&p);
-		jsmntok_t *tokens = (jsmntok_t *) malloc(sizeof(jsmntok_t) * n_tokens); // Allocate 512 tokens to start with
+		tokens = (jsmntok_t *) malloc(sizeof(jsmntok_t) * n_tokens); // Allocate 512 tokens to start with
 		while((resultCode = jsmn_parse(&p, response.objects[i], strlen(response.objects[i]), tokens, n_tokens)) == JSMN_ERROR_NOMEM) {
 			n_tokens <<= 1;
 			tokens = (jsmntok_t *) realloc(tokens, sizeof(jsmntok_t) * n_tokens);

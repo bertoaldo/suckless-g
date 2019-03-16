@@ -43,7 +43,7 @@ post_t parseContent(response_t response)
 	}
 
 	// Load JSON objects into char arrays
-	int i = 0, object_count = 0, length = 0;
+	int i = 0, object_count = 0;
 	for(i = 0; i < resultCode; ++i) if(tokens[i].type == JSMN_OBJECT) object_count++;
 	char **objects = (char **) malloc(object_count * sizeof(char **));
 
