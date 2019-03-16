@@ -27,20 +27,7 @@
 	Includes which contain types and
 	functions made by me.
 */
-
-#define ADDRESS_URL "sucklessg.org"
-#define BUFFER_SIZE 512
-
-typedef struct {
-	char *r;
-	int l;
-} response_t;
-typedef response_t request_t;
-
-typedef struct {
-	char **objects;
-	int length;
-} post_t;
+#include "networking.h"
 
 post_t parseContent(response_t response)
 {
@@ -126,7 +113,7 @@ response_t sendRequest(int sockfd, request_t request)
 	return response;
 }
 
-post_t makeRequest(char *request_type, char *location)
+post_t makeRequest(request_t request)
 {
 	// Initialize memory for the connection
 	struct addrinfo hints, *res;
@@ -151,10 +138,6 @@ post_t makeRequest(char *request_type, char *location)
 
 	// Connected! now we can proceed to do what we want.
 	response_t response;
-	request_t request;
-
-	request.r = (char *) malloc(BUFFER_SIZE);
-	request.l = sprintf(request.r, "%s %s HTTP/1.0\r\nHost: %s\r\n\r\n", request_type, location, ADDRESS_URL);
 	response = sendRequest(sockfd, request);
 
 	// CLose connection and free up memory here
