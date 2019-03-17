@@ -115,6 +115,8 @@ int main()
 					max_length = loadThread(max_length, thread_pos);
 					thread_pos_old = thread_pos;
 					thread_pos = 0;
+					free(thread_loc);
+					thread_loc = malloc(sizeof(int) * max_length);
 					depth++;
 				}
 			break;
@@ -123,12 +125,16 @@ int main()
 				if (depth == 1) {
 					max_length = loadThread(max_length, -1);
 					thread_pos = thread_pos_old;
+					free(thread_loc);
+					thread_loc = malloc(sizeof(int) * max_length);
 					depth--;
 				}
 			break;
 		}
 		wclear(pad);
 		for (int i = 0; i < max_length; i++) {
+			getyx(pad, y, x);
+			thread_loc[i] = y - 1;
 			attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
 			wattron(pad, attr);
 			if(i == thread_pos) {
