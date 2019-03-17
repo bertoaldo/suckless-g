@@ -1,10 +1,7 @@
-all: make_objects compile
-
-make_objects:
-	gcc -c sucklessg.c jsmn.c
+all: compile
 
 compile:
-	gcc sucklessg.o jsmn.o -lssl -lcrypto
+	gcc client.c hashtable.c jsmn.c networking.c prime.c -lssl -lcrypto -lm -lncurses
 
 clean:
 	rm *.o *.out

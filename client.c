@@ -10,11 +10,17 @@
 WINDOW *pad;
 WINDOW *w;
 static int mrow, mcol;
+static int max_length = 0;
+ht_hash_table **ht;
 
-int loadPost(ht_hash_table **ht, int ht_length, int thread_pos) {
+int loadThread(int ht_length, int thread_pos) {
 	request_t request;
 	request.r = malloc(512);
-	request.l = sprintf(request.r, "GET /post/%s\r\nHost: %s\r\n\r\n", ht_search(ht[thread_pos], "id"), ADDRESS_URL);
+	if(thread_pos == -1) {
+		request.l = sprintf(request.r, "GET /page/0\r\nHost: %s\r\n\r\n", ADDRESS_URL);
+	} else {
+		request.l = sprintf(request.r, "GET /post/%s\r\nHost: %s\r\n\r\n", ht_search(ht[thread_pos], "id"), ADDRESS_URL);
+	}
 	post_t posts = makeRequest(request);
 
 	for(int i = 0; i < ht_length; ++i)
@@ -26,8 +32,6 @@ int loadPost(ht_hash_table **ht, int ht_length, int thread_pos) {
 
 	return posts.length;
 }
-
-static int max_length = 0;
 
 int main()
 {
@@ -55,13 +59,14 @@ int main()
 	max_length = threads.length;
 
 	// load the hash table
-	ht_hash_table **ht = malloc(sizeof(ht_hash_table*) * max_length);
+	ht = malloc(sizeof(ht_hash_table*) * max_length);
 	for(int i = 0; i < max_length; ++i)
 		ht[i] = ht_new();
 	loadContent(ht, threads);
 
 	int rowcount = max_length * 10;
 	int thread_pos = 0;
+	int thread_pos_old = 0;
 	int attr = 0;
 	int depth = 0;
 	int *thread_loc = malloc(sizeof(int) * max_length);
@@ -79,7 +84,7 @@ int main()
 	for (int i = 0; i < max_length; i++) {
 		attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
 		getyx(pad, y, x);
-		thread_loc[i] = y;
+		thread_loc[i] = y - 2;
 		wattron(pad, attr);
 		if(i == thread_pos) {
 			wprintw(pad, ">[ id: %s ]\n", ht_search(ht[i], "id"));
@@ -105,9 +110,10 @@ int main()
 					thread_pos += (thread_pos == max_length - 1) ? 0 : 1;
 			break;
 			case KEY_RIGHT:
-				//
+				// load the thread
 				if (depth == 0) {
-					max_length = loadPost(ht, max_length, thread_pos);
+					max_length = loadThread(max_length, thread_pos);
+					thread_pos_old = thread_pos;
 					thread_pos = 0;
 					depth++;
 				}
@@ -115,8 +121,8 @@ int main()
 			case KEY_LEFT:
 				//
 				if (depth == 1) {
-					//max_length = back(ht, max_length);
-					thread_pos = 0;
+					max_length = loadThread(max_length, -1);
+					thread_pos = thread_pos_old;
 					depth--;
 				}
 			break;
@@ -133,7 +139,7 @@ int main()
 			wattroff(pad, attr);
 			wprintw(pad, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
 		}
-		prefresh(pad, thread_loc[thread_pos] - 2, 0, 1, 0, mrow-1, mcol);
+		prefresh(pad, thread_loc[thread_pos], 0, 1, 0, mrow-1, mcol);
 	}
 
 	// remove window
