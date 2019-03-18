@@ -14,6 +14,36 @@ static int mrow, mcol;
 ht_hash_table **ht;
 static int ht_length = 0;
 
+void displayReply() {
+
+}
+
+char* loadCaptcha() {
+	ht_hash_table *tmp_ht;
+	request_t request;
+
+	request.r = malloc(512);
+	request.l = sprintf(request.r, "GET /captcha\r\nHost: %s\r\n\r\n", ADDRESS_URL);
+	post_t posts = makeRequest(request);
+
+	tmp_ht = ht_new();
+	loadContent(&tmp_ht, posts);
+
+	// write captcha solution to svg file.
+	FILE *svg = fopen("captcha.svg", "w");
+	fprintf(svg, "%s", ht_search(tmp_ht, "captcha_svg"));
+	fclose(svg);
+	system("display captcha.svg &");
+
+	// save captcha id into char pointer to return
+	char *captcha_id = malloc(strlen(ht_search(tmp_ht, "captcha_id")) + 1);
+	strcpy(captcha_id, ht_search(tmp_ht, "captcha_id"));
+
+	ht_del_hash_table(tmp_ht);
+
+	return captcha_id;
+}
+
 void displayHelp() {
 	int x = 42;
 	int y = 8;
@@ -22,6 +52,7 @@ void displayHelp() {
 	WINDOW *help = newwin(y, x, LINES/2 - offset_y, COLS/2 - offset_x);
 	int ch;
 
+	// TODO: make this print into a subwin
 	wprintw(help, "\n");
 	wattron(help, A_UNDERLINE);
 	wprintw(help, " Controls (Press [?] to close)\n");
@@ -29,12 +60,12 @@ void displayHelp() {
 	wprintw(help, " UP/DOWN\tNavigate through threads\n");
 	wprintw(help, " RIGHT\t\tView thread\n");
 	wprintw(help, " LEFT\t\tGo back\n");
-	wprintw(help, " R\t\tReply/post new thread\n");
+	wprintw(help, " R\t\tReply/make new thread\n");
 	wprintw(help, " Q\t\tQuit the program\n");
 	wprintw(help, "\n");
 	box(help, 0, 0);
 	wrefresh(help);
-	while((ch = wgetch(help)) != '?') {
+	while((ch = wgetch(threadView)) != '?') {
 		// we can do something here later maybe
 	}
 	wborder(help, ' ', ' ', ' ',' ',' ',' ',' ',' ');
@@ -162,6 +193,7 @@ int main()
 			case 'r':
 			case 'R':
 					//reply function
+					displayReply();
 				break;
 			case '?':
 					displayHelp();
