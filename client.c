@@ -1,13 +1,14 @@
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
+#include <form.h>
 
 #include "networking.h"
 #include "hashtable.h"
 #include "JSONprocessing.h"
 
-WINDOW *pad;
-WINDOW *w;
+WINDOW *threadView;
+WINDOW *headerView;
 static int mrow, mcol;
 
 ht_hash_table **ht;
@@ -33,7 +34,7 @@ void displayHelp() {
 	wprintw(help, "\n");
 	box(help, 0, 0);
 	wrefresh(help);
-	while((ch = wgetch(pad)) != '?') {
+	while((ch = wgetch(help)) != '?') {
 		// we can do something here later maybe
 	}
 	wborder(help, ' ', ' ', ' ',' ',' ',' ',' ',' ');
@@ -73,11 +74,11 @@ int main()
 	getmaxyx(stdscr, mrow, mcol);
 	curs_set(0);
 
-	w = newwin(1, mcol, 0, 0);
-	wattron(w, A_REVERSE);
-	wprintw(w, " welcome to suckless /g/ -- sucklessg.org \n");
-	wattroff(w, A_REVERSE);
-	wrefresh(w);
+	headerView = newwin(1, mcol, 0, 0);
+	wattron(headerView, A_REVERSE);
+	wprintw(headerView, " welcome to suckless /g/ -- sucklessg.org \n");
+	wattroff(headerView, A_REVERSE);
+	wrefresh(headerView);
 
 	// makes a request to the server and returns the servers response.
 	request_t request;
@@ -101,35 +102,35 @@ int main()
 	int x = 0, y = 0;
 
 	// create pad
-	pad = newpad (rowcount+2, mcol);
-	keypad(pad, TRUE);
+	threadView = newpad (rowcount+2, mcol);
+	keypad(threadView, TRUE);
 	// col titles
-	wattron(pad, A_UNDERLINE);
-	wprintw(pad, "Press [?] for help\n");
-	wattroff(pad, A_UNDERLINE);
-	wrefresh(pad);
+	wattron(threadView, A_UNDERLINE);
+	wprintw(threadView, "Press [?] for help\n");
+	wattroff(threadView, A_UNDERLINE);
+	wrefresh(threadView);
 
 	for (int i = 0; i < ht_length; i++) {
 		attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
-		getyx(pad, y, x);
+		getyx(threadView, y, x);
 		thread_loc[i] = y - 2;
-		wattron(pad, attr);
+		wattron(threadView, attr);
 		if(i == thread_pos) {
-			wprintw(pad, ">[ id: %s ]\n", ht_search(ht[i], "id"));
+			wprintw(threadView, ">[ id: %s ]\n", ht_search(ht[i], "id"));
 		} else {
-			wprintw(pad, "[ id: %s ]\n", ht_search(ht[i], "id"));
+			wprintw(threadView, "[ id: %s ]\n", ht_search(ht[i], "id"));
 		}
-		wattroff(pad, attr);
-		wprintw(pad, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
+		wattroff(threadView, attr);
+		wprintw(threadView, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
 	}
 
 	// Show content of pad
-	prefresh(pad, 0, 0, 1, 0, mrow-1, mcol);
+	prefresh(threadView, 0, 0, 1, 0, mrow-1, mcol);
 
 	// wait for exit key
 	int ch;
 	rowcount -= mrow-2;
-	while((ch = wgetch(pad)) != 'q') {
+	while((ch = wgetch(threadView)) != 'q') {
 		switch (ch) {
 			case KEY_UP:
 					thread_pos -= (thread_pos == 0) ? 0 : 1;
@@ -166,30 +167,30 @@ int main()
 					displayHelp();
 				break;
 		}
-		wclear(pad);
-		wattron(pad, A_UNDERLINE);
-		wprintw(pad, "Press [?] for help\n");
-		wattroff(pad, A_UNDERLINE);
-		wrefresh(pad);
+		wclear(threadView);
+		wattron(threadView, A_UNDERLINE);
+		wprintw(threadView, "Press [?] for help\n");
+		wattroff(threadView, A_UNDERLINE);
+		wrefresh(threadView);
 		for (int i = 0; i < ht_length; i++) {
-			getyx(pad, y, x);
+			getyx(threadView, y, x);
 			thread_loc[i] = y - 1;
 			attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
-			wattron(pad, attr);
+			wattron(threadView, attr);
 			if(i == thread_pos) {
-				wprintw(pad, ">[ id: %s ]\n", ht_search(ht[i], "id"));
+				wprintw(threadView, ">[ id: %s ]\n", ht_search(ht[i], "id"));
 			} else {
-				wprintw(pad, "[ id: %s ]\n", ht_search(ht[i], "id"));
+				wprintw(threadView, "[ id: %s ]\n", ht_search(ht[i], "id"));
 			}
-			wattroff(pad, attr);
-			wprintw(pad, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
+			wattroff(threadView, attr);
+			wprintw(threadView, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
 		}
-		prefresh(pad, thread_loc[thread_pos], 0, 1, 0, mrow-1, mcol);
+		prefresh(threadView, thread_loc[thread_pos], 0, 1, 0, mrow-1, mcol);
 	}
 
 	// remove window
-	delwin(pad);
-	delwin(w);
+	delwin(threadView);
+	delwin(headerView);
 	clear();
 	refresh();
 	endwin();
