@@ -28,44 +28,7 @@
 	functions made by me.
 */
 #include "networking.h"
-
-post_t parseContent(response_t response)
-{
-	// Initialize the JSON parser and load up the JSON
-	jsmn_parser p;
-	jsmn_init(&p);
-
-	int resultCode = 0, n_tokens = BUFFER_SIZE;
-	jsmntok_t *tokens = (jsmntok_t *) malloc(sizeof(jsmntok_t) * n_tokens); // Allocate 512 tokens to start with
-	while((resultCode = jsmn_parse(&p, response.r, response.l, tokens, n_tokens)) == JSMN_ERROR_NOMEM) {
-		n_tokens <<= 1;
-		tokens = (jsmntok_t *) realloc(tokens, sizeof(jsmntok_t) * n_tokens);
-	}
-
-	// Load JSON objects into char arrays
-	int i = 0, object_count = 0;
-	for(i = 0; i < resultCode; ++i) if(tokens[i].type == JSMN_OBJECT) object_count++;
-	char **objects = (char **) malloc(object_count * sizeof(char **));
-
-	object_count = 0;
-	for(i = 0; i < resultCode; ++i) {
-		if(tokens[i].type == JSMN_OBJECT) {
-			objects[object_count] = (char *) malloc((tokens[i].end - tokens[i].start + 1) * sizeof(char *));
-			sprintf(objects[object_count], "%.*s", tokens[i].end-tokens[i].start, response.r+tokens[i].start);
-			object_count++;
-		}
-	}
-
-	// load up the threads into the container.
-	post_t threads;
-	threads.objects = objects;
-	threads.length = object_count;
-
-	// free up memory
-	free(tokens);
-
-	return threads;
-}
+#include "JSONprocessing.h"
 
 /* Returns response */
 response_t sendRequest(int sockfd, request_t request)

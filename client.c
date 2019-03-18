@@ -4,14 +4,42 @@
 
 #include "networking.h"
 #include "hashtable.h"
-
-#include "other_code.c"
+#include "JSONprocessing.h"
 
 WINDOW *pad;
 WINDOW *w;
 static int mrow, mcol;
-static int max_length = 0;
+
 ht_hash_table **ht;
+static int ht_length = 0;
+
+void displayHelp() {
+	int x = 42;
+	int y = 8;
+	int offset_x = x / 2;
+	int offset_y = y / 2;
+	WINDOW *help = newwin(y, x, LINES/2 - offset_y, COLS/2 - offset_x);
+	int ch;
+
+	wprintw(help, "\n");
+	wattron(help, A_UNDERLINE);
+	wprintw(help, " Controls (Press [?] to close)\n");
+	wattroff(help, A_UNDERLINE);
+	wprintw(help, " UP/DOWN\tNavigate through threads\n");
+	wprintw(help, " RIGHT\t\tView thread\n");
+	wprintw(help, " LEFT\t\tGo back\n");
+	wprintw(help, " R\t\tReply/post new thread\n");
+	wprintw(help, " Q\t\tQuit the program\n");
+	wprintw(help, "\n");
+	box(help, 0, 0);
+	wrefresh(help);
+	while((ch = wgetch(pad)) != '?') {
+		// we can do something here later maybe
+	}
+	wborder(help, ' ', ' ', ' ',' ',' ',' ',' ',' ');
+	wrefresh(help);
+	delwin(help);
+}
 
 int loadThread(int ht_length, int thread_pos) {
 	request_t request;
@@ -56,20 +84,20 @@ int main()
 	request.r = malloc(512);
 	request.l = sprintf(request.r, "GET /page/0\r\nHost: %s\r\n\r\n", ADDRESS_URL);
 	post_t threads = makeRequest(request);
-	max_length = threads.length;
+	ht_length = threads.length;
 
 	// load the hash table
-	ht = malloc(sizeof(ht_hash_table*) * max_length);
-	for(int i = 0; i < max_length; ++i)
+	ht = malloc(sizeof(ht_hash_table*) * ht_length);
+	for(int i = 0; i < ht_length; ++i)
 		ht[i] = ht_new();
 	loadContent(ht, threads);
 
-	int rowcount = max_length * 10;
+	int rowcount = ht_length * 10;
 	int thread_pos = 0;
 	int thread_pos_old = 0;
 	int attr = 0;
 	int depth = 0;
-	int *thread_loc = malloc(sizeof(int) * max_length);
+	int *thread_loc = malloc(sizeof(int) * ht_length);
 	int x = 0, y = 0;
 
 	// create pad
@@ -77,11 +105,11 @@ int main()
 	keypad(pad, TRUE);
 	// col titles
 	wattron(pad, A_UNDERLINE);
-	wprintw(pad, "press UP/DOWN to view.\n");
+	wprintw(pad, "Press [?] for help\n");
 	wattroff(pad, A_UNDERLINE);
 	wrefresh(pad);
 
-	for (int i = 0; i < max_length; i++) {
+	for (int i = 0; i < ht_length; i++) {
 		attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
 		getyx(pad, y, x);
 		thread_loc[i] = y - 2;
@@ -107,32 +135,43 @@ int main()
 					thread_pos -= (thread_pos == 0) ? 0 : 1;
 			break;
 			case KEY_DOWN:
-					thread_pos += (thread_pos == max_length - 1) ? 0 : 1;
+					thread_pos += (thread_pos == ht_length - 1) ? 0 : 1;
 			break;
 			case KEY_RIGHT:
 				// load the thread
 				if (depth == 0) {
-					max_length = loadThread(max_length, thread_pos);
+					ht_length = loadThread(ht_length, thread_pos);
 					thread_pos_old = thread_pos;
 					thread_pos = 0;
 					free(thread_loc);
-					thread_loc = malloc(sizeof(int) * max_length);
+					thread_loc = malloc(sizeof(int) * ht_length);
 					depth++;
 				}
 			break;
 			case KEY_LEFT:
-				//
+				// back up to the overview
 				if (depth == 1) {
-					max_length = loadThread(max_length, -1);
+					ht_length = loadThread(ht_length, -1);
 					thread_pos = thread_pos_old;
 					free(thread_loc);
-					thread_loc = malloc(sizeof(int) * max_length);
+					thread_loc = malloc(sizeof(int) * ht_length);
 					depth--;
 				}
 			break;
+			case 'r':
+			case 'R':
+					//reply function
+				break;
+			case '?':
+					displayHelp();
+				break;
 		}
 		wclear(pad);
-		for (int i = 0; i < max_length; i++) {
+		wattron(pad, A_UNDERLINE);
+		wprintw(pad, "Press [?] for help\n");
+		wattroff(pad, A_UNDERLINE);
+		wrefresh(pad);
+		for (int i = 0; i < ht_length; i++) {
 			getyx(pad, y, x);
 			thread_loc[i] = y - 1;
 			attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
@@ -156,7 +195,7 @@ int main()
 	endwin();
 
 	// free memory
-	for(int i = 0; i < max_length; ++i)
+	for(int i = 0; i < ht_length; ++i)
 		ht_del_hash_table(ht[i]);
 	free(ht);
 
