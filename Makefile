@@ -1,7 +1,7 @@
 all: compile
 
 compile:
-	gcc client.c hashtable.c jsmn.c networking.c prime.c JSONprocessing.c -lssl -lcrypto -lm -lform -lncurses
+	gcc -pedantic client.c hashtable.c jsmn.c networking.c prime.c JSONprocessing.c -lssl -lcrypto -lm -lform -lncurses
 
 clean:
 	rm *.o *.out

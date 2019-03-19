@@ -37,7 +37,7 @@ response_t sendRequest(int sockfd, request_t request)
 	response.l = 0;
 	response.r = NULL;
 
-	char buff[BUFFER_SIZE] = {};
+	char buff[BUFFER_SIZE];
 	int buff_size = 0;
 
 	SSL_load_error_strings ();
