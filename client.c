@@ -69,7 +69,7 @@ void displayReply(int thread_pos, int depth) {
 	// the reply form
 	int width = COLS, height = 8;
 	int top = LINES - height, left = COLS - width;
-	replyView  = newwin(LINES, COLS, 0, left);
+	replyView  = newwin(LINES, COLS, top, left);
 	keypad(replyView, TRUE);
 	curs_set(1);
 
@@ -144,16 +144,19 @@ void displayReply(int thread_pos, int depth) {
 				form_driver(form, ch);
 				break;
 		}
+		if(ch == KEY_F(2)) break;
 		wrefresh(replyView);
 	}
 
 	// make post request to the server.
-	request_t request;
-	request.r = malloc(2048);
-	char *body = malloc(2048);
-	sprintf(body, "{\n	\"content\":\"%s\",\n	\"captcha_id\": \"%s\",\n	\"captcha_solution\": \"%s\",\n	\"on_thread\": \"%s\"\n}", field_buffer(field[3], 0), captcha_id, field_buffer(field[1], 0), ht_search(ht[thread_pos], "id"));
-	request.l = sprintf(request.r, "POST /post HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
-	post_t posts = makeRequest(request);
+	if (ch == KEY_F(1)) {
+		request_t request;
+		request.r = malloc(2048);
+		char *body = malloc(2048);
+		sprintf(body, "{\n	\"content\":\"%s\",\n	\"captcha_id\": \"%s\",\n	\"captcha_solution\": \"%s\",\n	\"on_thread\": \"%s\"\n}", field_buffer(field[3], 0), captcha_id, field_buffer(field[1], 0), ht_search(ht[thread_pos], "id"));
+		request.l = sprintf(request.r, "POST /post HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
+		post_t posts = makeRequest(request);
+	}
 
 	// free memory
 	unpost_form(form);
@@ -168,6 +171,7 @@ void displayReply(int thread_pos, int depth) {
 
 	curs_set(0);
 	delwin(replyView);
+	loadThread(ht_length, thread_pos);
 }
 
 void displayHelp() {
