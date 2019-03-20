@@ -185,8 +185,8 @@ void displayReply(int depth) {
 	form_driver(form, REQ_PREV_FIELD);
 
 	// make post request to the server.
-	request_t request;
 	if (ch == KEY_F(1)) {
+		request_t request;
 		request.r = malloc(2048);
 		char *body = malloc(2048);
 		sprintf(body, "{\n	\"content\":\"%s\",\n	\"captcha_id\": \"%s\",\n	\"captcha_solution\": \"%s\",\n	\"on_thread\": \"%s\",\n	\"pic\": \"%s\"\n}", trim_whitespaces(field_buffer(field[3], 0)), captcha_id, field_buffer(field[1], 0), ((depth == 1) ? ht_search(ht[0], "id") : "-1"), trim_whitespaces(field_buffer(field[5], 0)));
