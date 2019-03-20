@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <form.h>
+#include <ctype.h>
 
 #include "networking.h"
 #include "hashtable.h"
@@ -12,7 +13,7 @@ WINDOW *headerView;
 WINDOW *replyView;
 
 FORM *form;
-FIELD *field[6];
+FIELD *field[8];
 
 static int mrow, mcol;
 
@@ -44,6 +45,7 @@ char* loadCaptcha() {
 
 	return captcha_id;
 }
+
 int loadThread(int ht_length, int thread_pos) {
 	request_t request;
 	request.r = malloc(512);
@@ -64,12 +66,34 @@ int loadThread(int ht_length, int thread_pos) {
 	return posts.length;
 }
 
-void displayReply(int thread_pos, int depth) {
+static char* trim_whitespaces(char *str) {
+	char *end;
+
+	// trim leading space
+	while(isspace(*str))
+		str++;
+
+	if(*str == 0) // all spaces?
+		return str;
+
+	// trim trailing space
+	end = str + strnlen(str, 128) - 1;
+
+	while(end > str && isspace(*end))
+		end--;
+
+	// write new null terminator
+	*(end+1) = '\0';
+
+	return str;
+}
+
+void displayReply(int depth) {
 	// set up the windows to display thread
 	// the reply form
-	int width = COLS, height = 8;
+	int width = COLS, height = 11;
 	int top = LINES - height, left = COLS - width;
-	replyView  = newwin(LINES, COLS, top, left);
+	replyView  = newwin(height, COLS, top, left);
 	keypad(replyView, TRUE);
 	curs_set(1);
 
@@ -79,22 +103,25 @@ void displayReply(int thread_pos, int depth) {
 	field[0] = new_field(1, 10, 0, 1, 0, 0);
 	field[1] = new_field(1, 4, 0, 12, 0, 0);
 	field[2] = new_field(1, 10, 2, 1, 0, 0);
-	field[3] = new_field(1, 50, 2, 12, 0, 0);
+	field[3] = new_field(3, 60, 2, 12, 0, 0);
 	field[4] = new_field(1, 10, 6, 1, 0, 0);
-	field[5] = new_field(1, 20, 6, 12, 0, 0);
+	field[5] = new_field(1, 40, 6, 12, 0, 0);
+	field[6] = new_field(1, 10, 8, 12, 0, 0);
 
 	/* Set field labels */
 	set_field_buffer(field[0], 0, "Captcha:");
 	set_field_buffer(field[2], 0, "Content:");
 	set_field_buffer(field[4], 0, "Pic:");
+	set_field_buffer(field[6], 0, "Done");
 
 	/* Set field options */
 	set_field_opts(field[0], O_VISIBLE | O_PUBLIC | O_AUTOSKIP);
 	//field_opts_off(field[1], O_VISIBLE | O_PUBLIC | O_EDIT | O_ACTIVE);
 	set_field_opts(field[2], O_VISIBLE | O_PUBLIC | O_AUTOSKIP);
-	//set_field_opts(field[3], O_VISIBLE | O_PUBLIC | O_EDIT | O_ACTIVE | O_WRAP);
+	set_field_opts(field[3], O_VISIBLE | O_PUBLIC | O_EDIT | O_ACTIVE | O_WRAP);
 	set_field_opts(field[4], O_VISIBLE | O_PUBLIC | O_AUTOSKIP);
 	set_field_opts(field[5], O_VISIBLE | O_PUBLIC | O_EDIT | O_ACTIVE);
+	field_opts_off(field[6], O_EDIT);
 
 	set_field_back(field[1], A_UNDERLINE);
 	set_field_back(field[3], A_UNDERLINE);
@@ -104,10 +131,16 @@ void displayReply(int thread_pos, int depth) {
 	form = new_form(field);
 	scale_form(form, &r, &w);
 	set_form_win(form, replyView);
-	set_form_sub(form, derwin(replyView, r, w, 1, 1));
+	set_form_sub(form, derwin(replyView, r, w, 1, 1)); // derpad??
 
 	// display the form
 	box(replyView, 0, 0);
+	wattron(replyView, A_REVERSE);
+	if(depth == 0)
+		mvwprintw(replyView, 0, 2, "Create new thread");
+	else
+		mvwprintw(replyView, 0, 2, "Reply to thread");
+	wattroff(replyView, A_REVERSE);
 	post_form(form);
 	wrefresh(replyView);
 
@@ -116,8 +149,8 @@ void displayReply(int thread_pos, int depth) {
 
 	int ch = 0;
 	while ((ch = wgetch(replyView)) != KEY_F(1)) {
-		switch(ch)
-		{	case KEY_DOWN:
+		switch(ch) {
+			case KEY_DOWN:
 				form_driver(form, REQ_NEXT_FIELD);
 				form_driver(form, REQ_END_LINE);
 				break;
@@ -148,12 +181,15 @@ void displayReply(int thread_pos, int depth) {
 		wrefresh(replyView);
 	}
 
+	form_driver(form, REQ_NEXT_FIELD);
+	form_driver(form, REQ_PREV_FIELD);
+
 	// make post request to the server.
+	request_t request;
 	if (ch == KEY_F(1)) {
-		request_t request;
 		request.r = malloc(2048);
 		char *body = malloc(2048);
-		sprintf(body, "{\n	\"content\":\"%s\",\n	\"captcha_id\": \"%s\",\n	\"captcha_solution\": \"%s\",\n	\"on_thread\": \"%s\"\n}", field_buffer(field[3], 0), captcha_id, field_buffer(field[1], 0), ht_search(ht[thread_pos], "id"));
+		sprintf(body, "{\n	\"content\":\"%s\",\n	\"captcha_id\": \"%s\",\n	\"captcha_solution\": \"%s\",\n	\"on_thread\": \"%s\",\n	\"pic\": \"%s\"\n}", trim_whitespaces(field_buffer(field[3], 0)), captcha_id, field_buffer(field[1], 0), ((depth == 1) ? ht_search(ht[0], "id") : "-1"), trim_whitespaces(field_buffer(field[5], 0)));
 		request.l = sprintf(request.r, "POST /post HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
 		post_t posts = makeRequest(request);
 	}
@@ -167,11 +203,12 @@ void displayReply(int thread_pos, int depth) {
 	free_field(field[3]);
 	free_field(field[4]);
 	free_field(field[5]);
+	free_field(field[6]);
 	free(captcha_id);
 
 	curs_set(0);
 	delwin(replyView);
-	loadThread(ht_length, thread_pos);
+	//loadThread(ht_length, 0);
 }
 
 void displayHelp() {
@@ -262,7 +299,15 @@ int main()
 			wprintw(threadView, "[ id: %s ]\n", ht_search(ht[i], "id"));
 		}
 		wattroff(threadView, attr);
-		wprintw(threadView, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
+		wprintw(threadView, "%s\n", ht_search(ht[i], "content"));
+		wprintw(threadView, "@ %s\n", ht_search(ht[i], "created"));
+		if (strcmp(ht_search(ht[i], "pic"), "") != 0) {
+			wprintw(threadView, "pic: %s\n", ht_search(ht[i], "pic"));
+		}
+		if (depth == 0) {
+			wprintw(threadView, "(replies: %s)\n",  ht_search(ht[i], "replies"));
+		}
+		wprintw(threadView, "\n");
 	}
 
 	// Show content of pad
@@ -303,11 +348,7 @@ int main()
 			case 'r':
 			case 'R':
 					//reply function
-					if (depth == 0) {
-						displayReply(thread_pos, depth);
-					} else {
-						displayReply(0, depth);
-					}
+					displayReply(depth);
 				break;
 			case '?':
 					displayHelp();
@@ -329,11 +370,15 @@ int main()
 				wprintw(threadView, "[ id: %s ]\n", ht_search(ht[i], "id"));
 			}
 			wattroff(threadView, attr);
-			if (depth == 0)
-				wprintw(threadView, "%s\n@ %s\n(replies: %s)\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"),  ht_search(ht[i], "replies"));
-			else
-				wprintw(threadView, "%s\n@ %s\n\n",  ht_search(ht[i], "content"),  ht_search(ht[i], "created"));
-
+			wprintw(threadView, "%s\n", ht_search(ht[i], "content"));
+			wprintw(threadView, "@ %s\n", ht_search(ht[i], "created"));
+			if (strcmp(ht_search(ht[i], "pic"), "") != 0) {
+				wprintw(threadView, "pic: %s\n", ht_search(ht[i], "pic"));
+			}
+			if (depth == 0) {
+				wprintw(threadView, "(replies: %s)\n",  ht_search(ht[i], "replies"));
+			}
+			wprintw(threadView, "\n");
 		}
 		prefresh(threadView, thread_loc[thread_pos], 0, 1, 0, mrow-1, mcol);
 	}

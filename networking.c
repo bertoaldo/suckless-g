@@ -68,6 +68,7 @@ response_t sendRequest(int sockfd, request_t request)
 		}
 	} else {
 		perror("Failed to send request");
+		exit(1);
 	}
 
 	SSL_free(conn);
@@ -90,13 +91,16 @@ post_t makeRequest(request_t request)
 	// Establish connection to remote server
 	if (getaddrinfo(ADDRESS_URL, "https", &hints, &res) != 0) {
 		perror("Error getting address info");
+		exit(1);
 	}
 	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sockfd == -1) {
 		perror("Error establishing socket");
+		exit(1);
 	}
 	if (connect(sockfd, res->ai_addr, res->ai_addrlen) != 0) {
 		perror("Error connecting to socket");
+		exit(1);
 	}
 
 	// Connected! now we can proceed to do what we want.
