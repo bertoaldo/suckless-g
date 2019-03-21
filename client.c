@@ -42,6 +42,9 @@ char* loadCaptcha() {
 	strcpy(captcha_id, ht_search(tmp_ht, "captcha_id"));
 
 	ht_del_hash_table(tmp_ht);
+	for(int i = 0; i < posts.length; i++)
+		free(posts.objects[i]);
+	free(posts.objects);
 
 	return captcha_id;
 }
@@ -63,27 +66,25 @@ int loadThread(int ht_length, int thread_pos) {
 		ht[i] = ht_new();
 	loadContent(ht, posts);
 
+	// free up dynamic memory
+	free(request.r);
+	for(int i = 0; i < posts.length; i++)
+		free(posts.objects[i]);
+	free(posts.objects);
+
 	return posts.length;
 }
 
-static char* trim_whitespaces(char *str) {
-	char *end;
-
-	// trim leading space
-	while(isspace(*str))
-		str++;
-
-	if(*str == 0) // all spaces?
-		return str;
-
-	// trim trailing space
-	end = str + strnlen(str, 128) - 1;
-
-	while(end > str && isspace(*end))
-		end--;
-
-	// write new null terminator
-	*(end+1) = '\0';
+char* trim_whitespaces(char *str) {
+	char *dst, *src;
+	dst = src = str;
+	while (*src != '\0')
+   {
+       while (*src == ' ' && *(src + 1) == ' ')
+           src++;
+      *dst++ = *src++;
+   }
+	*dst = '\0';
 
 	return str;
 }
@@ -169,6 +170,11 @@ void displayReply(int depth) {
 			case 127:
 				form_driver(form, REQ_DEL_PREV);
 				break;
+			case KEY_ENTER:
+			case 10:
+				form_driver(form, '\n');
+				form_driver(form, REQ_NEW_LINE);
+				break;
 			// Delete the char under the cursor
 			case KEY_DC:
 				form_driver(form, REQ_DEL_CHAR);
@@ -177,7 +183,7 @@ void displayReply(int depth) {
 				form_driver(form, ch);
 				break;
 		}
-		if(ch == KEY_F(2)) break;
+		if(ch == 27) break;
 		wrefresh(replyView);
 	}
 
@@ -192,6 +198,12 @@ void displayReply(int depth) {
 		sprintf(body, "{\n	\"content\":\"%s\",\n	\"captcha_id\": \"%s\",\n	\"captcha_solution\": \"%s\",\n	\"on_thread\": \"%s\",\n	\"pic\": \"%s\"\n}", trim_whitespaces(field_buffer(field[3], 0)), captcha_id, field_buffer(field[1], 0), ((depth == 1) ? ht_search(ht[0], "id") : "-1"), trim_whitespaces(field_buffer(field[5], 0)));
 		request.l = sprintf(request.r, "POST /post HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
 		post_t posts = makeRequest(request);
+
+		free(body);
+		free(request.r);
+		for(int i = 0; i < posts.length; i++)
+			free(posts.objects[i]);
+		free(posts.objects);
 	}
 
 	// free memory
@@ -309,8 +321,6 @@ int main()
 		}
 		wprintw(threadView, "\n");
 	}
-
-	// Show content of pad
 	prefresh(threadView, 0, 0, 1, 0, mrow-1, mcol);
 
 	// wait for exit key
@@ -391,6 +401,8 @@ int main()
 	endwin();
 
 	// free memory
+	free(thread_loc);
+
 	for(int i = 0; i < ht_length; ++i)
 		ht_del_hash_table(ht[i]);
 	free(ht);
