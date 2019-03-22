@@ -3,6 +3,7 @@
 #include <string.h>
 #include <form.h>
 #include <ctype.h>
+#include <locale.h>
 
 #include "networking.h"
 #include "hashtable.h"
@@ -24,7 +25,7 @@ char* loadCaptcha() {
 	ht_hash_table *tmp_ht;
 	request_t request;
 
-	request.r = malloc(512);
+	request.r = malloc(BUFFER_SIZE);
 	request.l = sprintf(request.r, "GET /captcha\r\nHost: %s\r\n\r\n", ADDRESS_URL);
 	post_t posts = makeRequest(request);
 
@@ -51,7 +52,7 @@ char* loadCaptcha() {
 
 int loadThread(int ht_length, int thread_pos) {
 	request_t request;
-	request.r = malloc(512);
+	request.r = malloc(BUFFER_SIZE);
 	if(thread_pos == -1) {
 		request.l = sprintf(request.r, "GET /page/0\r\nHost: %s\r\n\r\n", ADDRESS_URL);
 	} else {
@@ -67,7 +68,6 @@ int loadThread(int ht_length, int thread_pos) {
 	loadContent(ht, posts);
 
 	// free up dynamic memory
-	free(request.r);
 	for(int i = 0; i < posts.length; i++)
 		free(posts.objects[i]);
 	free(posts.objects);
@@ -107,13 +107,13 @@ void displayReply(int depth) {
 	field[3] = new_field(3, 60, 2, 12, 0, 0);
 	field[4] = new_field(1, 10, 6, 1, 0, 0);
 	field[5] = new_field(1, 40, 6, 12, 0, 0);
-	field[6] = new_field(1, 10, 8, 12, 0, 0);
+	field[6] = new_field(1, 8, 8, 12, 0, 0);
 
 	/* Set field labels */
 	set_field_buffer(field[0], 0, "Captcha:");
 	set_field_buffer(field[2], 0, "Content:");
 	set_field_buffer(field[4], 0, "Pic:");
-	set_field_buffer(field[6], 0, "Done");
+	set_field_buffer(field[6], 0, "[ Post ]");
 
 	/* Set field options */
 	set_field_opts(field[0], O_VISIBLE | O_PUBLIC | O_AUTOSKIP);
@@ -127,6 +127,7 @@ void displayReply(int depth) {
 	set_field_back(field[1], A_UNDERLINE);
 	set_field_back(field[3], A_UNDERLINE);
 	set_field_back(field[5], A_UNDERLINE);
+	set_field_back(field[6], A_REVERSE);
 
 	// Initialize the form
 	form = new_form(field);
@@ -152,12 +153,10 @@ void displayReply(int depth) {
 	while ((ch = wgetch(replyView)) != KEY_F(1)) {
 		switch(ch) {
 			case KEY_DOWN:
-				form_driver(form, REQ_NEXT_FIELD);
-				form_driver(form, REQ_END_LINE);
+				form_driver(form, REQ_NEXT_LINE);
 				break;
 			case KEY_UP:
-				form_driver(form, REQ_PREV_FIELD);
-				form_driver(form, REQ_END_LINE);
+				form_driver(form, REQ_PREV_LINE);
 				break;
 			case KEY_LEFT:
 				form_driver(form, REQ_PREV_CHAR);
@@ -179,6 +178,10 @@ void displayReply(int depth) {
 			case KEY_DC:
 				form_driver(form, REQ_DEL_CHAR);
 			break;
+			case 9:
+					form_driver(form, REQ_NEXT_FIELD);
+					form_driver(form, REQ_BEG_LINE);
+				break;
 			default:
 				form_driver(form, ch);
 				break;
@@ -187,11 +190,10 @@ void displayReply(int depth) {
 		wrefresh(replyView);
 	}
 
-	form_driver(form, REQ_NEXT_FIELD);
-	form_driver(form, REQ_PREV_FIELD);
-
 	// make post request to the server.
 	if (ch == KEY_F(1)) {
+		form_driver(form, REQ_NEXT_FIELD);
+		form_driver(form, REQ_PREV_FIELD);
 		request_t request;
 		request.r = malloc(2048);
 		char *body = malloc(2048);
@@ -199,8 +201,12 @@ void displayReply(int depth) {
 		request.l = sprintf(request.r, "POST /post HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
 		post_t posts = makeRequest(request);
 
+		FILE *delete_codes = fopen("post_hist.txt", "w");
+		for(int i = 0; i < posts.length; i++)
+			fprintf(delete_codes, "%s", posts.objects[i]);
+		fclose(delete_codes);
+
 		free(body);
-		free(request.r);
 		for(int i = 0; i < posts.length; i++)
 			free(posts.objects[i]);
 		free(posts.objects);
@@ -220,12 +226,11 @@ void displayReply(int depth) {
 
 	curs_set(0);
 	delwin(replyView);
-	//loadThread(ht_length, 0);
 }
 
 void displayHelp() {
 	int x = 42;
-	int y = 8;
+	int y = 9;
 	int offset_x = x / 2;
 	int offset_y = y / 2;
 	WINDOW *help = newwin(y, x, LINES/2 - offset_y, COLS/2 - offset_x);
@@ -240,7 +245,8 @@ void displayHelp() {
 	wprintw(help, " RIGHT\t\tView thread\n");
 	wprintw(help, " LEFT\t\tGo back\n");
 	wprintw(help, " R\t\tReply/make new thread\n");
-	wprintw(help, " Q\t\tQuit the program\n");
+	wprintw(help, " r\t\tRefresh page\n");
+	wprintw(help, " ESC\t\tQuit the program\n");
 	wprintw(help, "\n");
 	box(help, 0, 0);
 	wrefresh(help);
@@ -255,6 +261,7 @@ void displayHelp() {
 int main()
 {
 	// initialize curses
+	setlocale(LC_ALL, "");
 	initscr();
 	clear();
 	cbreak();
@@ -265,15 +272,22 @@ int main()
 	getmaxyx(stdscr, mrow, mcol);
 	curs_set(0);
 
+	// makes a request to the server and returns the servers response.
+
+	// splash text
+	WINDOW *splash = newwin(15, mcol, mrow / 4, mcol / 10);
+	wprintw(splash, "███████╗██╗   ██╗ ██████╗██╗  ██╗██╗     ███████╗███████╗███████╗\n██╔════╝██║   ██║██╔════╝██║ ██╔╝██║     ██╔════╝██╔════╝██╔════╝\n███████╗██║   ██║██║     █████╔╝ ██║     █████╗  ███████╗███████╗\n╚════██║██║   ██║██║     ██╔═██╗ ██║     ██╔══╝  ╚════██║╚════██║\n███████║╚██████╔╝╚██████╗██║  ██╗███████╗███████╗███████║███████║\n╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝╚══════╝\n                                                                 \n                        ██╗ ██████╗     ██╗                      \n                       ██╔╝██╔════╝    ██╔╝                      \n                      ██╔╝ ██║  ███╗  ██╔╝                       \n                     ██╔╝  ██║   ██║ ██╔╝                        \n                    ██╔╝   ╚██████╔╝██╔╝                         \n                    ╚═╝     ╚═════╝ ╚═╝                          ");
+	wrefresh(splash);
+	delwin(splash);
+
 	headerView = newwin(1, mcol, 0, 0);
 	wattron(headerView, A_REVERSE);
 	wprintw(headerView, " welcome to suckless /g/ -- sucklessg.org \n");
 	wattroff(headerView, A_REVERSE);
 	wrefresh(headerView);
 
-	// makes a request to the server and returns the servers response.
 	request_t request;
-	request.r = malloc(512);
+	request.r = malloc(BUFFER_SIZE);
 	request.l = sprintf(request.r, "GET /page/0\r\nHost: %s\r\n\r\n", ADDRESS_URL);
 	post_t threads = makeRequest(request);
 	ht_length = threads.length;
@@ -314,7 +328,10 @@ int main()
 		wprintw(threadView, "%s\n", ht_search(ht[i], "content"));
 		wprintw(threadView, "@ %s\n", ht_search(ht[i], "created"));
 		if (strcmp(ht_search(ht[i], "pic"), "") != 0) {
-			wprintw(threadView, "pic: %s\n", ht_search(ht[i], "pic"));
+			wprintw(threadView, "pic: ");
+			wattron(threadView, A_UNDERLINE);
+			wprintw(threadView, "%s\n", ht_search(ht[i], "pic"));
+			wattroff(threadView, A_UNDERLINE);
 		}
 		if (depth == 0) {
 			wprintw(threadView, "(replies: %s)\n",  ht_search(ht[i], "replies"));
@@ -326,7 +343,7 @@ int main()
 	// wait for exit key
 	int ch;
 	rowcount -= mrow-2;
-	while((ch = wgetch(threadView)) != 'q') {
+	while((ch = wgetch(threadView)) != 27) {
 		switch (ch) {
 			case KEY_UP:
 					thread_pos -= (thread_pos == 0) ? 0 : 1;
@@ -356,9 +373,16 @@ int main()
 				}
 			break;
 			case 'r':
+					ht_length = (depth == 0) ? loadThread(ht_length, -1) : loadThread(ht_length, 0);
+					free(thread_loc);
+					thread_loc = malloc(sizeof(int) * ht_length);
+				break;
 			case 'R':
 					//reply function
 					displayReply(depth);
+					ht_length = (depth == 0) ? loadThread(ht_length, -1) : loadThread(ht_length, 0);
+					free(thread_loc);
+					thread_loc = malloc(sizeof(int) * ht_length);
 				break;
 			case '?':
 					displayHelp();
@@ -372,7 +396,7 @@ int main()
 		for (int i = 0; i < ht_length; i++) {
 			getyx(threadView, y, x);
 			thread_loc[i] = y - 1;
-			attr = (i == thread_pos) ? A_REVERSE | A_BLINK | A_BOLD : A_REVERSE;
+			attr = (i == thread_pos) ? A_REVERSE | A_BOLD : A_REVERSE;
 			wattron(threadView, attr);
 			if(i == thread_pos) {
 				wprintw(threadView, ">[ id: %s ]\n", ht_search(ht[i], "id"));
@@ -383,7 +407,10 @@ int main()
 			wprintw(threadView, "%s\n", ht_search(ht[i], "content"));
 			wprintw(threadView, "@ %s\n", ht_search(ht[i], "created"));
 			if (strcmp(ht_search(ht[i], "pic"), "") != 0) {
-				wprintw(threadView, "pic: %s\n", ht_search(ht[i], "pic"));
+				wprintw(threadView, "pic: ");
+				wattron(threadView, A_UNDERLINE);
+				wprintw(threadView, "%s\n", ht_search(ht[i], "pic"));
+				wattroff(threadView, A_UNDERLINE);
 			}
 			if (depth == 0) {
 				wprintw(threadView, "(replies: %s)\n",  ht_search(ht[i], "replies"));
@@ -402,11 +429,9 @@ int main()
 
 	// free memory
 	free(thread_loc);
-
 	for(int i = 0; i < ht_length; ++i)
 		ht_del_hash_table(ht[i]);
 	free(ht);
-
 	for(int i = 0; i < threads.length; i++)
 		free(threads.objects[i]);
 	free(threads.objects);
