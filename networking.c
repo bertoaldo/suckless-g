@@ -31,7 +31,8 @@
 #include "JSONprocessing.h"
 
 /* Returns response */
-response_t sendRequest(int sockfd, request_t request)
+static response_t
+sendRequest(int sockfd, request_t request)
 {
 	response_t response;
 	response.l = 0;
@@ -77,7 +78,8 @@ response_t sendRequest(int sockfd, request_t request)
 	return response;
 }
 
-post_t makeRequest(request_t request)
+post_t
+makeRequest(request_t request)
 {
 	// Initialize memory for the connection
 	struct addrinfo hints, *res;

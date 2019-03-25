@@ -4,7 +4,8 @@
 
 #include "JSONprocessing.h"
 
-int objectCount(const char *jsonString)
+static int
+objectCount(const char *jsonString)
 {
 	int c = 0;
 	for(const char *ptr = jsonString; *ptr != '\0'; ptr++) {
@@ -13,7 +14,8 @@ int objectCount(const char *jsonString)
 	return c;
 }
 
-void unescape(char *string)
+static void
+unescape(char *string)
 {
 	char *src, *dst;
 	for(src = dst = string; *src != '\0'; ++src) {
@@ -31,7 +33,8 @@ void unescape(char *string)
 	*dst = '\0';
 }
 
-post_t parseContent(response_t response)
+post_t
+parseContent(response_t response)
 {
 	// Initialize the JSON parser and load up the JSON
 	jsmn_parser p;
@@ -69,7 +72,8 @@ post_t parseContent(response_t response)
 	return threads;
 }
 
-int loadContent(ht_hash_table **ht, post_t response)
+int
+loadContent(ht_hash_table **ht, post_t response)
 {
 	int resultCode, n_tokens = BUFFER_SIZE;
 	jsmn_parser p;
