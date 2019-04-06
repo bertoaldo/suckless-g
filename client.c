@@ -26,6 +26,44 @@ bool is_on_button;
 ht_hash_table **ht;
 int ht_length = 0;
 
+// rudimentary word wrap. works for my purposes.
+static char *
+wordWrap(char *str, int width)
+{
+	int l = strlen(str), c = 0;
+	char *new_str = malloc(sizeof(char) * l + 1);
+	strcpy(new_str, str);
+	new_str[l] = '\0';
+	char *ptr, *last_space;
+	for(ptr = last_space = new_str; *ptr != '\0'; ptr++) {
+		if (*ptr == ' ')
+			last_space = ptr;
+		if (c == width && *ptr != ' ') {
+			ptr = last_space;
+			*ptr = '\n';
+			c = 0;
+		}
+		c++;
+	}
+	return new_str;
+}
+
+static char*
+trim_whitespaces(char *str)
+{
+	char *dst, *src;
+	dst = src = str;
+	while (*src != '\0')
+   {
+       while (*src == ' ' && *(src + 1) == ' ')
+           src++;
+      *dst++ = *src++;
+   }
+	*dst = '\0';
+
+	return str;
+}
+
 static post_t
 requestWrapper(request_t request)
 {
@@ -101,22 +139,6 @@ loadThread(int ht_length, int thread_pos)
 	free(posts.objects);
 
 	return posts.length;
-}
-
-static char*
-trim_whitespaces(char *str)
-{
-	char *dst, *src;
-	dst = src = str;
-	while (*src != '\0')
-   {
-       while (*src == ' ' && *(src + 1) == ' ')
-           src++;
-      *dst++ = *src++;
-   }
-	*dst = '\0';
-
-	return str;
 }
 
 static void
@@ -197,7 +219,7 @@ displayReply(int depth)
 	wrefresh(replyView);
 
 	int ch = 0;
-	while ((ch = wgetch(replyView)) != KEY_F(1)) {
+	while ((ch = wgetch(replyView)) != 27) {
 		switch(ch) {
 			case KEY_DOWN:
 					form_driver(form, REQ_NEXT_LINE);
@@ -220,7 +242,8 @@ displayReply(int depth)
 			// Delete the char before cursor
 			case KEY_BACKSPACE:
 			case 127:
-				form_driver(form, REQ_DEL_PREV);
+				if(!is_on_button)
+					form_driver(form, REQ_DEL_PREV);
 				break;
 			case KEY_ENTER:
 			case 10:
@@ -239,8 +262,9 @@ displayReply(int depth)
 				break;
 			// Delete the char under the cursor
 			case KEY_DC:
-				form_driver(form, REQ_DEL_CHAR);
-			break;
+				if(!is_on_button)
+					form_driver(form, REQ_DEL_CHAR);
+				break;
 			case 9:
 					if (form->current == field[form->maxfield-1] && !is_on_button) {
 						// Those 2 lines allow the field buffer to be set
@@ -263,7 +287,8 @@ displayReply(int depth)
 					}
 				break;
 			default:
-				form_driver(form, ch);
+				if(!is_on_button)
+					form_driver(form, ch);
 				break;
 		}
 		if(ch == 10 && is_on_button) break;
@@ -277,6 +302,7 @@ displayReply(int depth)
 		form_driver(form, REQ_NEXT_FIELD);
 		form_driver(form, REQ_PREV_FIELD);
 		request_t request;
+		// TODO: replace these static mallocs with a dynamically resizable one
 		request.r = malloc(2048);
 		char *body = malloc(2048);
 		if (depth == 1)
@@ -286,12 +312,14 @@ displayReply(int depth)
 		request.l = sprintf(request.r, "POST /post HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
 		post_t posts = requestWrapper(request);
 
+		mvwprintw(replyView, 0, 0, "%s", body);
+		wrefresh(replyView);
+
+		ht_hash_table *d_ht = ht_new();
+		loadContent(&d_ht, posts);
 		FILE *delete_codes = fopen("post_hist.txt", "a");
-		for(int i = 0; i < posts.length; i++) {
-			fprintf(delete_codes, "%s", posts.objects[i]);
-			if (i != posts.length - 1)
-				fprintf(delete_codes, ",");
-		}
+		fprintf(delete_codes, "{\"id\":\"%s\",\"on_thread\":\"%s\",\"delete_code\":\"%s\", \"description\":\"%.30s\"}",
+							ht_search(d_ht, "id"), (depth==1?ht_search(ht[0], "id"):"-1"), ht_search(d_ht, "delete_code"), trim_whitespaces(field_buffer(field[3], 0)));
 		fclose(delete_codes);
 
 		free(body);
@@ -315,6 +343,9 @@ displayReply(int depth)
 	free_item(item[1]);
 	free(captcha_id);
 
+	wborder(replyView, ' ', ' ', ' ',' ',' ',' ',' ',' ');
+	wrefresh(replyView);
+
 	curs_set(0);
 	delwin(menu_win);
 	delwin(form_win);
@@ -334,7 +365,7 @@ displayHelp()
 	// TODO: make this print into a subwin -- use der win
 	wprintw(help, "\n");
 	wattron(help, A_UNDERLINE);
-	wprintw(help, " Controls (Press [?] to close)\n");
+	wprintw(help, " (Press [?] to close)\n");
 	wattroff(help, A_UNDERLINE);
 	wprintw(help, " UP/DOWN\tNavigate through threads\n");
 	wprintw(help, " RIGHT\t\tView thread\n");
@@ -345,6 +376,9 @@ displayHelp()
 	wprintw(help, " ESC\t\tQuit the program\n");
 	wprintw(help, "\n");
 	box(help, 0, 0);
+	wattron(help, A_REVERSE);
+	mvwprintw(help, 0, 2, "Controls");
+	wattroff(help, A_REVERSE);
 	wrefresh(help);
 	while((ch = wgetch(threadView)) != '?') {
 		// we can do something here later maybe
@@ -352,6 +386,73 @@ displayHelp()
 	wborder(help, ' ', ' ', ' ',' ',' ',' ',' ',' ');
 	wrefresh(help);
 	delwin(help);
+}
+
+// TODO fix memory leak in this function.. something to do with the new
+// menu items
+static int
+confirmDialog(char *message)
+{
+	int height = 7, width = 30;
+	int x = (COLS - width) / 2, y = (LINES - height) / 2;
+	int r = 0, w = 0;
+	WINDOW *confirm_dialog_win = newwin(height, width, y, x);
+	keypad(confirm_dialog_win, true);
+
+	// draw border and title
+	box(confirm_dialog_win, 0, 0);
+	wattron(confirm_dialog_win, A_REVERSE);
+	mvwprintw(confirm_dialog_win, 0, 2, "Confirm");
+	wattroff(confirm_dialog_win, A_REVERSE);
+	wrefresh(confirm_dialog_win);
+
+	// draw message in a new window
+	WINDOW *confirm_dialog_msg = derwin(confirm_dialog_win, 2, width-4, 2, 2);
+	char *message_ww = wordWrap(message, width-4);
+	wprintw(confirm_dialog_msg, "%s", message_ww);
+	free(message_ww);
+	wrefresh(confirm_dialog_msg);
+
+	item[0] = new_item("[   Ok   ]", "");
+	item[1] = new_item("[ Cancel ]", "");
+
+	menu = new_menu(item);
+	set_menu_format(menu, 1, 2);
+	scale_menu(menu, &r, &w);
+	WINDOW *menu_win = derwin(confirm_dialog_win, r, w, height - 2, (width - w) / 2);
+	set_menu_win(menu, menu_win);
+	set_menu_sub(menu, derwin(menu_win, r, w, 1, 1));
+	set_menu_mark(menu, "");
+	pos_menu_cursor(menu);
+	set_menu_fore(menu, A_REVERSE);
+	post_menu(menu);
+
+	int ch = 0, confirm = 0;
+	do {
+		switch (ch) {
+			case KEY_LEFT:
+					menu_driver(menu, REQ_LEFT_ITEM);
+				break;
+			case KEY_RIGHT:
+					menu_driver(menu, REQ_RIGHT_ITEM);
+				break;
+		}
+
+		wrefresh(menu_win);
+	} while ((ch = wgetch(confirm_dialog_win)) != 10);
+
+	if (strcmp(item_name(current_item(menu)), item_name(item[0])) == 0)
+		confirm = 1;
+
+	unpost_menu(menu);
+	free_item(item[1]);
+	free_item(item[0]);
+	free_menu(menu);
+	delwin(menu_win);
+	delwin(confirm_dialog_msg);
+	delwin(confirm_dialog_win);
+
+	return confirm;
 }
 
 static void
@@ -371,13 +472,14 @@ displayDelete()
 	ph.r = malloc(sz + 3);
 	ph.l = sprintf(ph.r, "[%s]", f);
 	ph.r[ph.l] = '\0';
+	fclose(fd);
 
 	post_t p = parseContent(ph);
-
 	ht_hash_table **del_ht = malloc(sizeof(ht_hash_table *) * p.length);
 	for(int i = 0; i < p.length; i++)
 		del_ht[i] = ht_new();
 	loadContent(del_ht, p);
+	int del_ht_length = p.length;
 
 	int width = 50, height = 15;
 	int top = height, left = width;
@@ -390,6 +492,7 @@ displayDelete()
 	wattroff(del_win, A_REVERSE);
 	wrefresh(del_win);
 
+	// TODO: remake this using a pad
 	WINDOW *del_posts = subwin(del_win, height - 2, width - 2, y+1, x+1);
 	int pos = 0, ch = 0;
 	do {
@@ -401,16 +504,42 @@ displayDelete()
 			case KEY_DOWN:
 					pos += (pos < p.length - 1) ? 1 : 0;
 				break;
+			case 10:
+					if (confirmDialog("Are you sure you want to delete this post?")) {
+						// delete the post
+						request_t request;
+						// TODO: replace these static mallocs with a dynamically resizable one
+						request.r = malloc(2048);
+						char *body = malloc(2048);
+						sprintf(body, "{\n	\"id\":\"%s\",\n	\"delete_code\": \"%s\"\n}", ht_search(del_ht[pos], "id"), ht_search(del_ht[pos], "delete_code"));
+						request.l = sprintf(request.r, "POST /delete HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\ncache-control: no-cache\r\n\r\n%s", ADDRESS_URL, (int) strlen(body), body);
+						post_t posts = requestWrapper(request);
+						ht_del_hash_table(del_ht[pos]);
+						del_ht_length--;
+					}
+				break;
 		}
-		for(int i = 0; i < p.length; i++) {
+		for(int i = 0; i < del_ht_length; i++) {
 			if(i == pos) wattron(del_posts, A_BOLD);
-			wprintw(del_posts, "[%s] – %s", ht_search(del_ht[i], "id"), ht_search(del_ht[i], "description"));
+			wprintw(del_posts, "%c[%s] – %s\n", (i==pos?'*':' '), ht_search(del_ht[i], "id"), ht_search(del_ht[i], "description"));
 			if(i == pos) wattroff(del_posts, A_BOLD);
 		}
 		wrefresh(del_posts);
 	} while((ch = wgetch(del_win)) != 27);
 
+	//save the file back to the thing
+
 	//free memory
+	for(int i = 0; i < del_ht_length; i++)
+		ht_del_hash_table(del_ht[i]);
+	for(int i = 0; i < p.length; i++)
+		free(p.objects[i]);
+	free(p.objects);
+	free(del_ht);
+	free(ph.r);
+	free(f);
+
+	// Clean up windows
 	wclear(del_posts);
 	wclear(del_win);
 	delwin(del_posts);
@@ -430,6 +559,7 @@ main()
 
 	// get terminal size
 	getmaxyx(stdscr, mrow, mcol);
+	set_escdelay(0);
 	curs_set(0);
 
 	// Header text
@@ -536,7 +666,7 @@ main()
 			attr = (i == thread_pos) ? A_REVERSE | A_BOLD : A_REVERSE;
 			wattron(threadView, attr);
 			if(i == thread_pos) {
-				wprintw(threadView, ">[ id: %s ]\n", ht_search(ht[i], "id"));
+				wprintw(threadView, "*[ id: %s ]\n", ht_search(ht[i], "id"));
 			} else {
 				wprintw(threadView, "[ id: %s ]\n", ht_search(ht[i], "id"));
 			}
